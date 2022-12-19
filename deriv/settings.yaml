@@ -1,0 +1,5 @@
+default:
+  driver: chrome
+  parametro_ultimo_numero: 0
+  qtd_ocorrencias_numero: 0
+  url: https://app.deriv.com
