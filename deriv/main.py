@@ -7,6 +7,7 @@ from time import sleep
 from typing import Union
 
 from selenium import webdriver
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.chrome.webdriver import WebDriver as ChromeWebDriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
@@ -21,254 +22,314 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from config import settings
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def registrar(
-    iteracao: int,
-    contagem_sequencia: int,
-    mensagem: str,
-    parametro_ultimo_numero: str = "0",
-    qtd_ocorrencias_numero: int = 0,
-):
-    print(
-        f"i={iteracao}|d={datetime.now()}|n={parametro_ultimo_numero}|q={qtd_ocorrencias_numero}|c={contagem_sequencia}|m={mensagem}"
-    )
-
-
-def get_driver() -> Union[ChromeWebDriver, FirefoxWebDriver]:
-    """
-    Retorna o driver com base na configuração
-    """
-
-    logger.info(f"Loading driver: {settings.driver}")
-    if settings.driver == "chrome":
-        return webdriver.Chrome()
-    else:
-        raise NotImplemented(settings.driver)
-
-
-def run(
-    driver: Union[ChromeWebDriver, FirefoxWebDriver],
-    user: str,
-    password: str,
-    url: str,
-    parametro_ultimo_numero: str,
-    qtd_ocorrencias_numero: int,
-):
-    print(f"parametro_ultimo_numero: {parametro_ultimo_numero}")
-    print(f"qtd_ocorrencias_numero: {qtd_ocorrencias_numero}")
-
-    print("Pegando o botão de login")
-    driver.get(url)
-
-    btn_login: WebElement = WebDriverWait(driver, 30).until(
-        expected_conditions.presence_of_element_located((By.ID, "dt_login_button"))
-    )
-    btn_login.click()
-
-    actions = ActionChains(driver)
-
-    print("Pegando o campo de usuário")
-    txtEmail: WebElement = WebDriverWait(driver, 30).until(
-        expected_conditions.presence_of_element_located((By.ID, "txtEmail"))
-    )
-    txtEmail.send_keys(user)
-
-    print("Pegando o campo de senha")
-    txtPass: WebElement = WebDriverWait(driver, 30).until(
-        expected_conditions.presence_of_element_located((By.ID, "txtPass"))
-    )
-    txtPass.send_keys(password)
-
-    eleLogin: WebElement = WebDriverWait(driver, 30).until(
-        expected_conditions.presence_of_element_located((By.NAME, "login"))
-    )
-    eleLogin.click()
-
-    WebDriverWait(driver, 30).until(
-        expected_conditions.presence_of_element_located((By.CLASS_NAME, "dc-modal"))
-    )
-
-    driver.execute_script(
+class DerivBase:
+    def get_driver(self) -> Union[ChromeWebDriver, FirefoxWebDriver]:
         """
-        var modal = document.getElementsByClassName('dc-modal')[0];
-        modal.parentNode.removeChild(modal);
-    """
-    )
+        Retorna o driver com base na configuração
+        """
 
-    sleep(10)
+        logger.info(f"Loading driver: {settings.driver}")
+        if settings.driver == "chrome":
+            return webdriver.Chrome()
+        else:
+            raise NotImplemented(settings.driver)
 
-    # print("Pegando o botão do menu principal")
-    # driver.find_element_by_id("underlying_component").click()
+    def do_login(self, user: str, password: str):
+        btn_login: WebElement = WebDriverWait(self.driver, 30, 0.1).until(
+            expected_conditions.presence_of_element_located((By.ID, "dt_login_button"))
+        )
+        btn_login.click()
 
-    # sleep(10)
+        logger.info("Pegando o campo de usuário")
+        txtEmail: WebElement = WebDriverWait(self.driver, 30, 0.1).until(
+            expected_conditions.presence_of_element_located((By.ID, "txtEmail"))
+        )
+        txtEmail.send_keys(user)
 
-    # print("Pegando o botão de apostas")
-    # driver.find_element_by_class_name("synthetic_index").click()
+        logger.info("Pegando o campo de senha")
+        txtPass: WebElement = WebDriverWait(self.driver, 30, 0.1).until(
+            expected_conditions.presence_of_element_located((By.ID, "txtPass"))
+        )
+        txtPass.send_keys(password)
 
-    # sleep(3)
+        eleLogin: WebElement = WebDriverWait(self.driver, 30, 0.1).until(
+            expected_conditions.presence_of_element_located((By.NAME, "login"))
+        )
+        eleLogin.click()
 
-    # print("Pegando o elemento 100 index")
-    # driver.find_element_by_id("R_100").click()
+    def do_close_modal(self):
+        logger.info("Aguarda o modal aparecer")
+        WebDriverWait(self.driver, 30, 0.1).until(
+            expected_conditions.presence_of_element_located((By.CLASS_NAME, "dc-modal"))
+        )
 
-    # sleep(3)
+        logger.info("Deleta o modal")
+        self.driver.execute_script(
+            """
+            var modal = document.getElementsByClassName('dc-modal')[0];
+            modal.parentNode.removeChild(modal);
+            """
+        )
 
-    # print("Pegando tipo de aposta")
-    # driver.find_element_by_class_name("contract_current").click()
+        logger.info("banners propaganda")
+        while True:
+            try:
+                element: WebElement = WebDriverWait(
+                    driver=self.driver,
+                    timeout=5,
+                    poll_frequency=0.5,
+                    ignored_exceptions=[TimeoutException],
+                ).until(
+                    expected_conditions.presence_of_element_located(
+                        (By.CLASS_NAME, "notification-banner__close-icon")
+                    )
+                )
+                if element:
+                    element.click()
+                else:
+                    break
+            except:
+                break
 
-    # sleep(2)
+        logger.info("banners web trade")
+        try:
+            element: WebElement = WebDriverWait(
+                driver=self.driver,
+                timeout=5,
+                poll_frequency=0.5,
+                ignored_exceptions=[TimeoutException],
+            ).until(
+                expected_conditions.presence_of_element_located(
+                    (By.CLASS_NAME, "notification__close-button")
+                )
+            )
+            if element:
+                element.click()
+        except:
+            pass
 
-    # print("Pegando o elemnto combina/difere")
-    # contract_subtypes = driver.find_elements_by_class_name("sub ")
+    def open_url(self):
+        raise NotImplemented("Implement on base class")
 
-    # for contract in contract_subtypes:
-    #     if contract.text == "Combina/Difere":
-    #         contract.click()
-    #         break
 
-    # print("Configurando o tick")
-    # duration_amount = driver.find_element_by_id("duration_amount")
-    # duration_amount.send_keys(Keys.CONTROL + "a")
-    # duration_amount.send_keys(Keys.DELETE)
-    # duration_amount.send_keys("1")
+class DerivR100(DerivBase):
+    def __init__(self) -> None:
+        super().__init__()
+        self.driver = self.get_driver()
 
-    # print("Altere a conta se necessário, aguardando 30 segundos")
-    # sleep(30)
+    def open_url(self):
+        self.driver.get(settings.url)
 
-    # # INICIO DA LOGICA DE JOGADAS
+    def config_demo_account(self):
+        WebDriverWait(self.driver, 30, ignored_exceptions=[]).until(
+            expected_conditions.presence_of_element_located(
+                (By.ID, "dt_core_account-info_acc-info")
+            )
+        ).click()
 
-    # ultimo_numero = ""
-    # contagem_sequencia = 0
-    # quantidade_numeros_iguais = 0
-    # maximo_quantidade_numeros_iguais = 500
+        WebDriverWait(self.driver, 30, ignored_exceptions=[]).until(
+            expected_conditions.presence_of_element_located(
+                (By.ID, "dt_core_account-switcher_demo-tab")
+            )
+        ).click()
 
-    # iteracoes = 0
-    # qtd_ganhos = 0
+        WebDriverWait(self.driver, 30, ignored_exceptions=[]).until(
+            expected_conditions.presence_of_element_located(
+                (By.CLASS_NAME, "acc-switcher__id")
+            )
+        ).click()
 
-    # while True:
-    #     num_novo = "".join(
-    #         re.findall(r"[0-9]+", driver.find_element_by_id("spot").text)
-    #     )
+    def do_config_r100(self):
+        logger.info("Volatilidade")
+        volatility_element_name = "cq-symbol-select-btn"
+        sleep(1)
+        WebDriverWait(
+            self.driver,
+            30 + 10,
+            ignored_exceptions=[
+                StaleElementReferenceException,
+            ],
+        ).until(
+            expected_conditions.presence_of_element_located(
+                (By.CLASS_NAME, volatility_element_name)
+            )
+        ).click()
 
-    #     # Variável de controle para saber se houve compra durante o loop
-    #     comprou = False
+        sleep(1)
+        WebDriverWait(self.driver, 30 + 10).until(
+            expected_conditions.presence_of_element_located(
+                (By.CLASS_NAME, "sc-mcd__item--R_100")
+            )
+        ).click()
 
-    #     if num_novo != ultimo_numero:
-    #         ultimo_numero = num_novo
-    #         iteracoes += 1
+        logger.info("seletor de modalidade (combina/difere)")
+        sleep(1)
+        WebDriverWait(self.driver, 30 + 10).until(
+            expected_conditions.presence_of_element_located(
+                (By.CLASS_NAME, "contract-type-widget__display")
+            )
+        ).click()
 
-    #         # Var de controle para saber se a página travou e precisa ser reaberta
-    #         quantidade_numeros_iguais = 0
+        logger.info("Clica no combina/difere")
+        sleep(1)
+        WebDriverWait(self.driver, 30).until(
+            expected_conditions.presence_of_element_located(
+                (By.ID, "dt_contract_match_diff_item")
+            )
+        ).click()
 
-    #         if num_novo[6:] == parametro_ultimo_numero:
+        tick_0 = (
+            "/html/body/div[1]/div/div/div/div[4]/div/fieldset[3]/div[2]/div[1]/span[1]"
+        )
 
-    #             contagem_sequencia += 1
+        logger.info("ticks")
+        WebDriverWait(self.driver, 30).until(
+            expected_conditions.presence_of_element_located((By.XPATH, tick_0))
+        ).click()
 
-    #             registrar(
-    #                 iteracoes,
-    #                 contagem_sequencia,
-    #                 num_novo,
-    #                 parametro_ultimo_numero,
-    #                 qtd_ocorrencias_numero,
-    #             )
+        logger.info("entrada")
+        WebDriverWait(self.driver, 30).until(
+            expected_conditions.presence_of_element_located(
+                (By.ID, "dc_stake_toggle_item")
+            )
+        ).click()
 
-    #             if contagem_sequencia >= int(qtd_ocorrencias_numero):
-    #                 registrar(
-    #                     iteracoes,
-    #                     contagem_sequencia,
-    #                     "clicar em comprar",
-    #                     parametro_ultimo_numero,
-    #                     qtd_ocorrencias_numero,
-    #                 )
-    #                 comprou = True
+        logger.info("valor")
+        element = WebDriverWait(self.driver, 30).until(
+            expected_conditions.presence_of_element_located((By.ID, "dt_amount_input"))
+        )
 
-    #                 purchase_button_bottom = driver.find_element_by_id(
-    #                     "purchase_button_bottom"
-    #                 )
-    #                 purchase_button_bottom.click()
+        while len(element.get_attribute("value")) > 0:
+            element.send_keys(Keys.BACK_SPACE)
 
-    #                 sleep(10)  # Aguarda o texto Esse contrato ganhou aparecer
+        element.send_keys("1")
 
-    #                 contract_purchase_heading = driver.find_element_by_id(
-    #                     "contract_purchase_heading"
-    #                 )
-    #                 result: str = contract_purchase_heading.text
-    #                 registrar(
-    #                     iteracoes,
-    #                     contagem_sequencia,
-    #                     result,
-    #                     parametro_ultimo_numero,
-    #                     qtd_ocorrencias_numero,
-    #                 )
+        logger.info("foo")
 
-    #                 if result == "Esse contrato ganhou":
-    #                     qtd_ganhos += 1
+    def play(self):
+        ultimo_numero = ""
+        contagem_sequencia = 0
+        quantidade_numeros_iguais = 0
+        maximo_quantidade_numeros_iguais = 500
 
-    #                 sleep(3)
+        iteracoes = 0
+        qtd_ganhos = 0
 
-    #                 registrar(
-    #                     iteracoes,
-    #                     contagem_sequencia,
-    #                     "clicar em fechar",
-    #                     parametro_ultimo_numero,
-    #                     qtd_ocorrencias_numero,
-    #                 )
-    #                 close_confirmation_container = driver.find_element_by_id(
-    #                     "close_confirmation_container"
-    #                 )
-    #                 close_confirmation_container.click()
+        while True:
+            sleep(0.1)
+            element = WebDriverWait(self.driver, 30 + 10).until(
+                expected_conditions.presence_of_element_located(
+                    (By.CLASS_NAME, "cq-animated-price")
+                )
+            )
 
-    #                 registrar(
-    #                     iteracoes,
-    #                     contagem_sequencia,
-    #                     f"Qtd ganhos: {qtd_ganhos}",
-    #                     parametro_ultimo_numero,
-    #                     qtd_ocorrencias_numero,
-    #                 )
-    #         else:
-    #             if contagem_sequencia > 0:
-    #                 contagem_sequencia = 0
-    #                 registrar(
-    #                     iteracoes,
-    #                     contagem_sequencia,
-    #                     "Contagem zerada",
-    #                     parametro_ultimo_numero,
-    #                     qtd_ocorrencias_numero,
-    #                 )
+            num_novo = element.text
 
-    #     else:
-    #         quantidade_numeros_iguais += 1
+            # Variável de controle para saber se houve compra durante o loop
+            comprou = False
 
-    #         if quantidade_numeros_iguais >= maximo_quantidade_numeros_iguais:
-    #             registrar(
-    #                 iteracoes,
-    #                 contagem_sequencia,
-    #                 "A página está inativa, abortando robô",
-    #                 parametro_ultimo_numero,
-    #                 qtd_ocorrencias_numero,
-    #             )
-    #             continue
+            if num_novo != ultimo_numero:
+                logger.info(num_novo)
+                ultimo_numero = num_novo
+                iteracoes += 1
 
-    #     if comprou:
-    #         contagem_sequencia = 0
+                # Var de controle para saber se a página travou e precisa ser reaberta
+                quantidade_numeros_iguais = 0
 
-    #     sleep(0.1)
+                if num_novo[-1:] == str(parametro_ultimo_numero):
+                    contagem_sequencia += 1
+
+                    if contagem_sequencia >= int(qtd_ocorrencias_numero):
+                        comprou = True
+
+                    # logger.info("clica em difere")
+                    WebDriverWait(self.driver, 30).until(
+                        expected_conditions.presence_of_element_located(
+                            (By.CLASS_NAME, "btn-purchase__info")
+                        )
+                    ).click()
+
+                    sleep(10)  # Aguarda o texto Esse contrato ganhou aparecer
+
+            #             contract_purchase_heading = driver.find_element_by_id(
+            #                 "contract_purchase_heading"
+            #             )
+            #             result: str = contract_purchase_heading.text
+            #             registrar(
+            #                 iteracoes,
+            #                 contagem_sequencia,
+            #                 result,
+            #                 parametro_ultimo_numero,
+            #                 qtd_ocorrencias_numero,
+            #             )
+
+            #             if result == "Esse contrato ganhou":
+            #                 qtd_ganhos += 1
+
+            #             sleep(3)
+
+            #             registrar(
+            #                 iteracoes,
+            #                 contagem_sequencia,
+            #                 "clicar em fechar",
+            #                 parametro_ultimo_numero,
+            #                 qtd_ocorrencias_numero,
+            #             )
+            #             close_confirmation_container = driver.find_element_by_id(
+            #                 "close_confirmation_container"
+            #             )
+            #             close_confirmation_container.click()
+
+            #             registrar(
+            #                 iteracoes,
+            #                 contagem_sequencia,
+            #                 f"Qtd ganhos: {qtd_ganhos}",
+            #                 parametro_ultimo_numero,
+            #                 qtd_ocorrencias_numero,
+            #             )
+            #     else:
+            #         if contagem_sequencia > 0:
+            #             contagem_sequencia = 0
+            #             registrar(
+            #                 iteracoes,
+            #                 contagem_sequencia,
+            #                 "Contagem zerada",
+            #                 parametro_ultimo_numero,
+            #                 qtd_ocorrencias_numero,
+            #             )
+
+            else:
+                quantidade_numeros_iguais += 1
+            #     if quantidade_numeros_iguais >= maximo_quantidade_numeros_iguais:
+            #         registrar(
+            #             iteracoes,
+            #             contagem_sequencia,
+            #             "A página está inativa, abortando robô",
+            #             parametro_ultimo_numero,
+            #             qtd_ocorrencias_numero,
+            #         )
+            #         continue
+
+            if comprou:
+                contagem_sequencia = 0
+
+            sleep(0.1)
 
 
 if __name__ == "__main__":
     parametro_ultimo_numero = settings.parametro_ultimo_numero
     qtd_ocorrencias_numero = settings.qtd_ocorrencias_numero
-    user = settings.user
-    password = settings.password
-    url = settings.url
-    driver = get_driver()
 
-    run(
-        driver,
-        user,
-        password,
-        url,
-        parametro_ultimo_numero,
-        qtd_ocorrencias_numero,
-    )
+    r100 = DerivR100()
+    r100.open_url()
+    r100.do_login(settings.user, settings.password)
+    r100.do_close_modal()
+    r100.config_demo_account()
+    r100.do_config_r100()
+    r100.play()
+
+    logger.info("finished")
